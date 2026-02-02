@@ -188,12 +188,11 @@ for i in np.arange(0, 5, 0.5):
     init_dir = np.array([np.sin(theta0), 0.0, 0.0])
     beam_radius = 6 # meters
     x0 = np.random.normal(0, beam_radius / 2, num_particles)
-    y0 = np.random.normal(0, beam_radius / 2, num_particles)
-    #entry_times = np.random.normal(0, sigma, num_particles)+T0
     entry_times = T0 + (x0 * np.tan(theta0)) / c
     
     for j in range(num_particles):
-        P = [x0[j], y0[j], 0]
+        #P = [x0[j], y0[j], 0]
+        P = [x0[j],0.0, 0.0]
         D = init_dir.copy()
         photon_is_absorbed = 0
         s = -scattering_length * np.log(1 - random.uniform(0, 1)) * (1 - 0.75)
@@ -331,6 +330,6 @@ ax.set_ylabel('Light Penetration Depth (m)', fontsize=10)
 # )
 ax.set_ylim(-0.05, 0.1)
 ax.legend()
-fig.savefig(f'penetrationwithcorrection_{scattering_length}.svg', format='svg', dpi=1200)
+#fig.savefig(f'penetrationwithcorrection_{scattering_length}.svg', format='svg', dpi=1200)
 plt.show()
 print(m2)

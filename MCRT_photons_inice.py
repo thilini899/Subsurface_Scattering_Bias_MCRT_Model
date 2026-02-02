@@ -36,7 +36,7 @@ from scipy.interpolate import interp1d
 
 start = time.time()         # Start point to measure the execution time
 
-num_particles = 25       # Number of particles enter the medium
+num_particles = 684       # Number of particles enter the medium
 c = 3e8                     # Speed of light in vacuum (m/s)
 n_ice = 1.33                # Refractive index in ice
 speed_in_ice = c / n_ice    
@@ -49,7 +49,7 @@ num_bootstrap=500
 confidence=0.68
 
 theta0 = np.radians(angle_deg)
-init_dir = np.array([np.sin(theta0), 0.0, 0.0])
+init_dir = np.array([-np.sin(theta0), 0.0, 0.0])
 beam_radius = 6 # meters
 
 def fresnel_reflectance(n1, n2, theta_i):
@@ -311,7 +311,6 @@ num_particles=len(accepted_x)       # Number of photons inserts the medium is eq
 print( "Number of photons goes into ice =",num_particles)
 
 x0 = np.random.normal(0, beam_radius / 2, num_particles)
-y0 = np.random.normal(0, beam_radius / 2, num_particles)
 time_of_flight = np.zeros(num_particles)
 
 entry_times = T0 + (x0 * np.tan(theta0)) / c                                    #Intial timings of photons
@@ -328,12 +327,12 @@ rotation_matrix = np.array([
 #photon_is_absorbed == 0  -> photon is still "alive" (continue propagating)
 #photon_is_absorbed == 1  -> photon terminated (either absorbed in volume or escaped at surface)
 for j in range(num_particles):
-    P = [x0[j], y0[j], 0]                                                   # Initial position of the photon                        
+    P = [0, 0, 0]                                                   # Initial position of the photon                        
     D = init_dir.copy()
     photon_is_absorbed = 0                                                 
-    s = -scattering_length * np.log(1 - random.uniform(0, 1)) * (1 - 0.75)  # total path length traveled since last interaction
+    s = -scattering_length * np.log(1 - random.uniform(0, 1)) #* (1 - 0.75)  # total path length traveled since last interaction
     Time = entry_times[j]                                                   # Update time the photon
-    D[2] += -s                                                              # vertical photon position relative to the surface
+    D[2] += s                                         # vertical photon direction relative to the surface
     P[2] += D[2]                                                            # Update position of photon
     Time += np.sqrt(D[0]*D[0] + D[1]*D[1] + D[2]*D[2])/ speed_in_ice        # Update time in seconds
     v = D[:]
@@ -358,10 +357,10 @@ for j in range(num_particles):
         #This randomizes the scattering direction around the original propagation axis.
         theta2 = random.uniform(0, 2 * math.pi)
     
-        new_v = new_direction1_unit
+        new_v = new_direction1_unit  
     
         #5) Sample the next free path length between scattering events 
-        s = -scattering_length * np.log(1 - random.uniform(0, 1)) * (1 - 0.75)
+        s = -scattering_length * np.log(1 - random.uniform(0, 1)) #* (1 - 0.75)
     
         #6) Apply azimuthal rotation around the current axis
         #Rotate new_v by theta2 around axis v.
@@ -372,7 +371,7 @@ for j in range(num_particles):
         new_direction2_unit = s * unitvector_conversion(new_direction2)
     
         #Store the current displacement in D (in-place update).
-        D[:] = new_direction2_unit
+        D[:] = new_direction2_unit   
     
         # 8) Update the photon position P by adding the step displacement
         P[0] += D[0]
@@ -436,7 +435,7 @@ plt.ylabel('Detector Counts')
 plt.legend(['Incident Pulse','Backscattered Pulse'],loc='upper right',)
 #plt.title(f"Angle of Incident = {angle_deg} degrees, Sca.Length={scattering_length} m,\nNumber of Photons = {num_particles}" )
 plt.tight_layout()
-plt.savefig(f'TOF_plot{angle_deg , scattering_length , num_particles}.svg', format='svg', dpi=1200)
+#plt.savefig(f'TOF_plot{angle_deg , scattering_length , num_particles}.svg', format='svg', dpi=1200)
 plt.show()
 
 end = time.time()            #End point to measure the execution time

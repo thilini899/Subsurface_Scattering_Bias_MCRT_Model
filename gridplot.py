@@ -189,9 +189,9 @@ for l in range(10):
                 P = [x0[k], y0[k], 0]
                 D = init_dir.copy()
                 photon_is_absorbed = 0
-                s = -scattering_length * np.log(1 - random.uniform(0, 1)) * (1 - 0.75)
+                s = -scattering_length * np.log(1 - random.uniform(0, 1)) #* (1 - 0.75)
                 Time = entry_times[k]
-                D[2] += -s
+                D[2] += -s           # (-) sign indicate that moving downward in z direction
                 P[2] += D[2]
                 Time += np.linalg.norm(D) / speed_in_ice
                 v = D[:]
@@ -271,7 +271,7 @@ plt.ylabel('Scattering Length (m)')
 plt.legend(handles=[green_patch, brown_patch], loc='upper left')
 image_format = 'svg'
 image_name = f'penetrationdepth{num_particles}.svg'
-fig.savefig(image_name, format=image_format, dpi=1200)
+#fig.savefig(image_name, format=image_format, dpi=1200)
 plt.show()
 end = time.time()
 print(f"\nTime taken for simulation: {end - start:.2f} s")
