@@ -1,44 +1,31 @@
-"""
-Author      : Thilini Bamunu Arachchige ( t.thilakarathne@und.edu )
-Affiliation : University of North Dakota, Department of Physics and Astrophysics
-Advisor     : Dr. Markus Allgaier
-Description :
-    This code simulates photon propagation in glacier ice using
-    Monte Carlo radiative transfer techniques. This contains Scattering bias 
-    and error of light penetration calculated using the medians of populations of
-    initial and backscattered pulses. 
-    
-"""
+#Angle of incident is varying while scattering length remains constant. This is to study how light penetration depth and its bias 
+#change with angle of indicident.
+
 import numpy as np
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import random
 import math
 import time
-from scipy.stats import exponnorm
 from scipy.interpolate import interp1d
+from scipy.stats import exponnorm
 import csv
-from v11 import m
+#from v13 import num_particles 
 
 start = time.time()
-num_particles = 171
+
+num_particles = 1000
 c = 3e8  # Speed of light in vacuum (m/s)
 n_ice = 1.33
 speed_in_ice = c / n_ice
 FWHM = 0.5e-9
 sigma = FWHM / 2.35
-scattering_length = 0.02
+scattering_length = 0.00001
 absorption_length = 100
-num_bootstrap=1000
-confidence=0.68
+mu=0
 
-angles=[]
-bias_penetrationdep=[]
-light_penetrationdep=[]
-
+#############################
 class left_emg_gen:
-    """
-    Exponentially Modified Gaussian (EMG) with left tail 
-    """
+    """Exponentially Modified Gaussian (EMG) with left tail"""
     def cdf(self, x, K, loc=0, scale=1):
         return 1 - exponnorm.cdf(-x, K=K, loc=-loc, scale=scale)
 
@@ -48,11 +35,9 @@ class left_emg_gen:
 left_emg = left_emg_gen()
 
 def get_fit_hist(bins, times, sigmas, Ks, pulse_norms):
-    """
-    Evaluate the functional form for a given binning.
-    """
-    x = (bins[:-1] + bins[1:]) / 2.0    # Compute bin centers
-    bin_widths = bins[1:] - bins[:-1]   # Bin width
+    """Evaluate the functional form for a given binning."""
+    x = (bins[:-1] + bins[1:]) / 2.0  # Compute bin centers
+    bin_widths = bins[1:] - bins[:-1]  # Bin width
     fit_hist = np.zeros_like(x)
 
     # Sum up EMG components
@@ -65,9 +50,7 @@ def get_fit_hist(bins, times, sigmas, Ks, pulse_norms):
     return fit_hist, x
 
 def read_csv_header(filename):
-    """
-    Reads the header of a CSV file and extracts fit parameters
-    """
+    """Reads the header of a CSV file and extracts fit parameters"""
     header_data = {}
     with open(filename, newline='', encoding='utf-8') as f:
         reader = csv.reader(f, delimiter=',')
@@ -79,26 +62,28 @@ def read_csv_header(filename):
             if row_counter >= int(header_data.get("Header_Len", ["0"])[0]):  
                 break
     return header_data
-def rejection_sampling(x,fit_hist_interp,target_smaples):
-    """
-    Generate observations from ATL06 response function using rejection sampling
-    """
+
+def rejection_sampling(x,fit_hist_interp, target_samples):
     accepted_data = []
+    accepted_y = []
+
     x = np.array(x)
     fit_hist_interp = np.array(fit_hist_interp)
-    
-    while len(accepted_data) < target_smaples:
+
+    while len(accepted_data) < target_samples:
         for xi, hist in zip(x, fit_hist_interp):
             yi = np.random.rand()
-    
+
             if (hist > yi) and (yi >= 0):
                 accepted_data.append(xi)
-            if len(accepted_data) >= target_smaples:
-                break
-    return np.array(accepted_data)
+                accepted_y.append(yi)
+            
+            if len(accepted_data) >= target_samples:
+                break  # Stop once we reach the target
+    return np.array(accepted_data), np.array(accepted_y)
 
-#Read data from ATLAS impulse response function
-filename = "./LinearImpulseResponse_AA2_2024326_A.csv"   #File path for ATLAS response 
+#############################
+filename = "/Users/thilinithilakarathne/Desktop/MonteCarloSimulation/LinearImpulseResponse_AA2_2024326_A.csv"
 header_info = read_csv_header(filename)
 ispot = 1
 bins = np.linspace(-50, 400, int(450 / 0.05) + 1)
@@ -109,13 +94,16 @@ fit_hist, fit_x = get_fit_hist(
     np.array(header_info[f"Fit_params_spot{ispot}_Ks"], dtype=np.float64),
     np.array(header_info[f"Fit_params_spot{ispot}_norms"], dtype=np.float64)
 )
-fit_hist = fit_hist / np.max(fit_hist)                                          #Normalize the y axis values 
-x = np.linspace(-2.5, 5.5, num_particles*50)
-random.shuffle(x) 
-f_interp = interp1d(fit_x, fit_hist, kind='linear', fill_value="extrapolate")   #Use interpolation to generate y values corresponding to random x values
+fit_hist = fit_hist / np.max(fit_hist)
+x = np.linspace(-2.5, 5.5, num_particles)
+f_interp = interp1d(fit_x, fit_hist, kind='linear', fill_value="extrapolate")
 fit_hist_interp = f_interp(x)
-accepted_x = rejection_sampling(x, fit_hist_interp,num_particles)           #After the rejection sampling
-T0 = accepted_x *1e-9                                                     #T0 is the intial timing for photons
+accepted_x, _ = rejection_sampling(x, fit_hist_interp, num_particles)
+
+############################
+T0 = accepted_x *1e-9
+#T0 = np.random.randn(num_particles) * sigma + mu 
+time_of_flight = np.zeros(num_particles)
 
 #############################
 rotation_matrix = np.array([
@@ -165,22 +153,25 @@ def check_photon_escape(s, z, photon_is_absorbed, Time, j):
         return 1
     return 0
 
-def bootstrap_median(data, num_bootstrap, confidence):
+def bootstrap_median(data, num_bootstrap=1000, confidence=0.68):
     # data in seconds
     medians = []
     n = len(data)
-    
     for _ in range(num_bootstrap):
         resample = np.random.choice(data, size=n, replace=True)
         medians.append(np.median(resample))
     lower = np.percentile(medians, (1 - confidence) / 2 * 100)
     upper = np.percentile(medians, (1 + confidence) / 2 * 100)
     median = np.median(data)
-    
     return median, lower, upper, upper - lower
 
+angles=[]
+bias_penetrationdep=[]
+light_penetrationdep=[]
+
+
 #############################
-for i in np.arange(0, 5, 0.5):    
+for i in np.arange(0.1, 2.7, 0.1):    
     time_of_flight = np.zeros(num_particles)
     angle_deg = i
     #print(f"\nAngle of incident : {i:.2f} degrees")
@@ -189,11 +180,12 @@ for i in np.arange(0, 5, 0.5):
     init_dir = np.array([np.sin(theta0), 0.0, 0.0])
     beam_radius = 6 # meters
     x0 = np.random.normal(0, beam_radius / 2, num_particles)
+    y0 = np.random.normal(0, beam_radius / 2, num_particles)
+    #entry_times = np.random.normal(0, sigma, num_particles)+T0
     entry_times = T0 + (x0 * np.tan(theta0)) / c
     
     for j in range(num_particles):
-        #P = [x0[j], y0[j], 0]
-        P = [x0[j],0.0, 0.0]
+        P = [x0[j], y0[j], 0]
         D = init_dir.copy()
         photon_is_absorbed = 0
         s = -scattering_length * np.log(1 - random.uniform(0, 1)) * (1 - 0.75)
@@ -220,99 +212,65 @@ for i in np.arange(0, 5, 0.5):
             photon_is_absorbed = check_photon_escape(s, D[2], photon_is_absorbed, Time, j)
             v = new_direction2_unit
             k_rot = np.dot(rotation_matrix, v)
-                        
-    #Get medians and uncertainties
-    med1, low1, high1, unc1 = bootstrap_median(time_of_flight,num_bootstrap, confidence)
-    med2, low2, high2, unc2 = bootstrap_median(entry_times, num_bootstrap, confidence)
-    time_difference = med1 - med2 
-    light_penetration = (3e8 * time_difference ) /2.66 #(2 * 1.33)
-    light_penetrationdep.append(light_penetration)
-    errorofdepth= c* unc1/ 2.66 # (2*1.33=2.66)
-    bias_penetrationdep.append(errorofdepth)
     
+    #print(f"Escaped photons: {np.count_nonzero(time_of_flight)}")
+    
+    # Get medians and uncertainties
+    med1, low1, high1, unc1 = bootstrap_median(time_of_flight)
+    med2, low2, high2, unc2 = bootstrap_median(entry_times)
+    
+    # print(f"Histogram 1: median = {med1} s, uncertainty = ±{unc1/2} s")
+    # print(f"Histogram 2: median = {med2} s, uncertainty = ±{unc2/2} s")
+    
+    time_difference = med1 - med2 
+    light_penetration = (3e8 * time_difference ) / (2 * 1.33)
+    light_penetrationdep.append(light_penetration)
+    errorofdepth = (c * np.sqrt(unc1**2 + unc2**2)) / (2 * n_ice)
+    bias_penetrationdep.append(errorofdepth)
+    ##########################
+    # edges = np.linspace(-5.5e-9, 5.5e-9,100)
+    # fig, ax = plt.subplots()
+    # #plt.hist(T0, bins=edges, alpha=0.8, label='Incident Pulse', edgecolor='black',color='purple')
+    # plt.hist(entry_times, bins=edges, alpha=0.8, label='Incident Pulse', edgecolor='blue')
+    # plt.hist(time_of_flight, bins=edges, alpha=0.8, label='Backscattered Pulse', color='darksalmon', edgecolor='darksalmon')
+    # plt.axvline(x=med1, color='blue', linestyle='--', linewidth=1.5)
+    # plt.axvline(x=med2, color='red', linestyle='--', linewidth=1.5)
+    # #plt.ylim(0,1000)
+    # plt.xlabel(r'$\tau$ [s]')
+    # plt.ylabel('Counts')
+    # plt.legend(['Incident Pulse', f'Backscattered Pulse\nLight Penetration = {light_penetration:.4f} m  +/- {errorofdepth:.3f} m'],fontsize=7, frameon=False)
+    # plt.title(f"Time Distribution (angle={i:.2f}) (Scattering length={scattering_length})")
+    # plt.tight_layout()
+    # plt.savefig(f'TOF_plot{i:.1f}.svg', format='svg', dpi=1200)
+    # plt.show()
+  
+    # print(f"Angle {i} -> Light Penetration Depth=   {light_penetration:.3f} m +/- {errorofdepth:.3f} m" )
+
 end = time.time()
 print(f"\nTime taken for simulation: {end - start:.2f} s")
 
-##find line of best fit
-m1, b = np.polyfit(angles, light_penetrationdep, 1)
-fit_line_y = np.polyval([m1, b], angles)
-print("m1 =",m1)
-
-# plt.subplot(2, 1, 1)
-plt.errorbar(angles, light_penetrationdep,yerr=bias_penetrationdep, fmt='o',color='blue' ,ecolor='red', capsize=5, label='Data Without Correction')
-#plt.plot(angles,light_penetrationdep,color='purple')
-plt.plot(angles, fit_line_y, color='black', linestyle='-',label='Fit Line')
-plt.xlabel('Angle of incidence (degrees)')
-#plt.title(f'Angle vs Light Peneration Depth\n (Sca.Length = {scattering_length} m, Num. of particles ={num_particles}) ')
-plt.ylabel('Apparent range to surface (m)',fontsize=10)
-plt.legend()
-plt.ylim(-0.05, 0.1)
-plt.axhline(0, color='black', linestyle='--', linewidth=1) #plt.title(f'Angle vs Light Peneration (Sca.Length = {scattering_length} m) ')
-plt.savefig(f'penetrationwithoutcorrection_{scattering_length}.svg', format='svg', dpi=1200)
-plt.show()
-
-print("m =",m)
-light_penetrationdep -= m * np.array(angles)
-
-diff = np.array(light_penetrationdep) - np.array(bias_penetrationdep)
+# plt.subplot(2, 1, 2)    
+# plt.plot(angles,bias_penetrationdep,'bo--')
+# plt.xlabel('Angle of incident( degrees)')
+# plt.ylabel('Light Penetration dep. Bias (m)',fontsize=7)
+# plt.axhline(0, color='black', linestyle='--', linewidth=1) 
+# #plt.title(f'Angle vs Bias of Light Peneration (Sca.Length = {scattering_length} m) ')
+# #plt.savefig('angle vs bias.svg', format='svg', dpi=1200)
 
 ##find line of best fit
-m2, b2 = np.polyfit(angles, light_penetrationdep, 1)
-fit_line_y2 = np.polyval([m2, b2], angles)
+m, b = np.polyfit(angles, light_penetrationdep, 1)
+fit_line_y = np.array(m) * angles + b
 
-# plt.subplot(2, 1, 1)
-fig, ax = plt.subplots() 
-# plot data with error bars
-ax.errorbar(
-    angles,
-    light_penetrationdep,
-    yerr=bias_penetrationdep,
-    fmt='o',
-    color='blue',
-    ecolor='red',
-    capsize=5,
-    label='Data with Correction'
-)
+# # plt.subplot(2, 1, 1)
+# plt.errorbar(angles, light_penetrationdep,yerr=bias_penetrationdep, fmt='o',color='blue' ,ecolor='red', capsize=5, label='Data with Error Bars')
+# #plt.scatter(angles,light_penetrationdep,color='purple')
+# plt.plot(angles, fit_line_y, color='black', linestyle='-',label='Fit Line')
+# plt.xlabel('Angle of incident( degrees)')
+# plt.title(f'Angle vs Light Peneration Depth\n (Sca.Length = {scattering_length} m, Num. of particles ={num_particles}) ')
+# plt.ylabel('Light Penetration dep. (m)',fontsize=10)
+# plt.axhline(0, color='black', linestyle='--', linewidth=1) #plt.title(f'Angle vs Light Peneration (Sca.Length = {scattering_length} m) ')
+# plt.savefig('angle vs lightpenetration.svg', format='svg', dpi=1200)
+# plt.show()
 
-# fitted line
-ax.plot(
-    angles,
-    fit_line_y2,
-    color='black',
-    linestyle='-',
-    #label='Fit Line'
-)
+print(m)
 
-# # set limits before fill_between so ax.get_ylim() is stable
-ax.set_ylim(min(light_penetrationdep) - 0.1, max(light_penetrationdep) + 0.1)
-y_bottom, y_top = ax.get_ylim()
-
-# Extend x-range slightly to cover the full width
-x_extended = np.linspace(angles[0] - 0.1, angles[-1] + 0.1, 500)
-diff_interp = np.interp(x_extended, angles, diff)  # interpolate diff
-
-mask = diff_interp > 0
-x_pos = x_extended[mask]
-y_pos = diff_interp[mask]
-max_x = np.max(x_pos)
-plt.axvline(max_x, linestyle='--', linewidth=1)
-
-# Fill green where diff > 0
-ax.fill_between(
-    x_extended, y_bottom, y_top,
-    where=(diff_interp > 0),
-    facecolor='lightgreen', alpha=0.8,
-    interpolate=True, zorder=0, label='Penetration Significant'
-)
-ax.axhline(0, color='black', linestyle='--', linewidth=1)
-ax.set_xlabel('Angle of incidence (degrees)')
-ax.set_ylabel('Apparent range to surface (m)', fontsize=10)
-# ax.set_title(
-#     f'Angle vs Light Penetration Depth\n'
-#   f'(Sca. Length = {scattering_length} m, Num. of particles = {num_particles})'
-# )
-ax.set_ylim(-0.05, 0.1)
-ax.legend()
-fig.savefig(f'penetrationwithcorrection_{scattering_length}.svg', format='svg', dpi=1200)
-plt.show()
-print("m2 =",m2)

@@ -36,15 +36,15 @@ from scipy.interpolate import interp1d
 
 start = time.time()         # Start point to measure the execution time
 
-num_particles = 684       # Number of particles enter the medium
+num_particles = 171         # Number of particles enter the medium
 c = 3e8                     # Speed of light in vacuum (m/s)
 n_ice = 1.33                # Refractive index in ice
 speed_in_ice = c / n_ice    
-# FWHM = 0.5e-9               # Full width half maximun of the incoming laser pulse 
+# FWHM = 0.5e-9             # Full width half maximun of the incoming laser pulse 
 # sigma = FWHM / 2.35
-scattering_length = 0.1  # meters, Scattering length in ice
+scattering_length = 0.1     # meters, Scattering length in ice
 absorption_length = 100     # meters, Absorption length in ice
-angle_deg = 0.0            # degrees, Angle of Incident
+angle_deg = 0.0             # degrees, Angle of Incident
 num_bootstrap=500
 confidence=0.68
 
@@ -430,12 +430,12 @@ print(f"Light Penetration Depth= {light_penetration}")
 plt.axvline(x=med2, color='blue', linestyle='--', linewidth=1.5)        #Plot a dashed vertical line at the Incident median
 plt.axvline(x=med1, color='orangered', linestyle='--', linewidth=1.5)   #Plot a dashed vertical line at the backscattered median
 plt.xlim(-3e-9,10e-9)
-plt.xlabel('Time of flights [s]')
-plt.ylabel('Detector Counts')
+plt.xlabel('Time of flight [s]',fontsize=14)
+plt.ylabel('Detector Counts',fontsize=14)
 plt.legend(['Incident Pulse','Backscattered Pulse'],loc='upper right',)
 #plt.title(f"Angle of Incident = {angle_deg} degrees, Sca.Length={scattering_length} m,\nNumber of Photons = {num_particles}" )
 plt.tight_layout()
-#plt.savefig(f'TOF_plot{angle_deg , scattering_length , num_particles}.svg', format='svg', dpi=1200)
+plt.savefig(f'TOF_plot{angle_deg , scattering_length , num_particles}.svg', format='svg', dpi=1200)
 plt.show()
 
 end = time.time()            #End point to measure the execution time

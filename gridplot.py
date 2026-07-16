@@ -13,9 +13,7 @@ import matplotlib.pyplot as plt
 import random
 import math
 import time
-from lightpen_depths import m  # Correction slope from previous fit
-from matplotlib.colors import ListedColormap
-import matplotlib.patches as mpatches
+from v11 import m  # Correction slope from previous fit
 from collections import defaultdict
 from scipy.stats import exponnorm
 from scipy.interpolate import interp1d
@@ -236,42 +234,83 @@ dep_averages = {key: (sum(val)/len(val) if len(val) > 0 else 0)
 bias_averages = {key: (sum(val)/len(val) if len(val) > 0 else 0) 
             for key, val in bias_values.items()}
 
-# Define the two colors
-colors = ['steelblue', 'tomato']  # Example: blue for 0, red for 1
+light_penetrationdep = np.full((len(scattering_lengths), len(angles)), np.nan, dtype=float) 
 
-# Create a custom colormap
-cmap = ListedColormap(colors)
+for (i, j), value in dep_averages.items():   #[scattering_lengths,angles]
+    light_penetrationdep[i, j] = float(value)
+# angles -> 1D array, shape (N,)
+# scattering_lengths -> 1D array, shape (M,)
+# light_penetrationdep -> 2D array, shape (M, N)
 
-# Create a 3D RGB array for custom colors
-color_map = np.zeros((light_penetrationdep.shape[0],
-                      light_penetrationdep.shape[1], 3))
+# rows = scattering length index i
+# cols = angle index j
+bias_penetrationdep = np.full((len(scattering_lengths), len(angles)), np.nan, dtype=float) 
 
-for i in range(light_penetrationdep.shape[0]):
-    for j in range(light_penetrationdep.shape[1]):
-        if not np.isnan(light_penetrationdep[i, j]):                                            
-            if abs(dep_averages[(i, j)]) - bias_averages[(i, j)] > 0:
-            #if light_penetrationdep[i, j] - bias_penetrationdep[i, j] > 0:
-                color_map[i, j] = plt.get_cmap('summer')(0.6)[:3]  # greenish
-            else:
-                color_map[i, j] = plt.get_cmap('copper')(0.6)[:3]  # brownish
+for (i, j), value in bias_averages.items():   #[scattering_lengths,angles]
+    bias_penetrationdep[i, j] = float(value)
+# -----------------------------------------------------------------------------------------
 
-# Define the legend handles with fixed colors matching your colormap
-green_patch = mpatches.Patch(color=plt.get_cmap('summer')(0.6), label='Significant Scattering Bias')
-brown_patch = mpatches.Patch(color=plt.get_cmap('copper')(0.6), label='Insignificant Scattering Bias')
+#Heat map of penetration depth
+fig, ax = plt.subplots(figsize=(8, 6))
+im = ax.imshow(
+    light_penetrationdep,
+    origin='lower',
+    aspect='auto',
+    extent=[
+        angles.min(), angles.max(),
+        scattering_lengths.min(), scattering_lengths.max()
+    ],
+    cmap='viridis'
+)
 
-fig, ax = plt.subplots()
+cbar = plt.colorbar(im, ax=ax)
 
-#plt.figure(figsize=(8, 6))
-plt.imshow(color_map, origin='lower', aspect='auto',
-            extent=[angles.min(), angles.max(),
-                    scattering_lengths.min(), scattering_lengths.max()])
-plt.xlabel('Angle of Incidence (degrees)')
-plt.ylabel('Scattering Length (m)')
-#plt.title(f'Penetration Depth Significance Map\nNumber of Photons = {num_particles}')
-plt.legend(handles=[green_patch, brown_patch], loc='upper left')
+# -----------------------------------------------------------------------------------------
+
+# Contour plot of penetrato depth
+# A gives the x-coordinates
+# S gives the y-coordinates
+A, S = np.meshgrid(angles, scattering_lengths)
+Z = np.round((light_penetrationdep / bias_penetrationdep), 2)
+
+#for 171 photons
+levels = [0.5, 1, 2.0, 3.0, 4.0]
+manual_positions = [
+    (6.3, 0.02),   # 0.5
+    (5.0, 0.042),   # 1.0
+    (3.3, 0.060),   # 2.0
+    (2.2, 0.075),   # 3.0
+    (1.1, 0.083),   # 4.0
+    #(0.35, 0.094),  # 5.0
+]
+
+# #for 684 photons
+# levels = [0.5, 1, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0,8.0]
+# manual_positions = [
+#     (8.2, 0.01),   # 0.5
+#     (4.7, 0.020),   # 1.0
+#     (5.2, 0.041),   # 2.0
+#     (5.7, 0.065),   # 3.0
+#     (3.5, 0.062),   # 4.0
+#     (2.4, 0.064),   # 5.0
+#     (2.0, 0.08),   # 5.0
+#     (2.0, 0.09),   # 5.0
+#     (1.0, 0.085),   # 5.0
+# ]
+cs = ax.contour(A, S, Z, levels = levels, cmap='Wistia')
+ax.clabel(cs, inline=True, fontsize=14,manual=manual_positions,colors='white')
+ 
+#cbar = plt.colorbar(cs, ax=ax)
+cbar.set_label('Penetration Depth(m)',fontsize=14)
+
+ax.set_xlabel('Angle of Incidence (degrees)',fontsize=14)
+ax.set_ylabel('Effective Scattering Length (m)',fontsize=14)
+#ax.set_title('Contour Map of Light Penetration Depth')
+plt.axhline(y=0.03, color='white', linestyle='--')
 image_format = 'svg'
-image_name = f'penetrationdepth{num_particles}.svg'
-#fig.savefig(image_name, format=image_format, dpi=1200)
+image_name = f'penetrationdepth_heat{num_particles}.svg'
+fig.savefig(image_name, format=image_format, dpi=1200, bbox_inches='tight')
 plt.show()
+
 end = time.time()
 print(f"\nTime taken for simulation: {end - start:.2f} s")
